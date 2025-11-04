@@ -1,0 +1,158 @@
+version: '3.8'
+
+services:
+  # Zookeeper - Required for Kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - spark-network
+
+  # Kafka Broker - Receives high-velocity event stream
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      # Performance tuning for high throughput
+      KAFKA_NUM_NETWORK_THREADS: 8
+      KAFKA_NUM_IO_THREADS: 8
+      KAFKA_SOCKET_SEND_BUFFER_BYTES: 102400
+      KAFKA_SOCKET_RECEIVE_BUFFER_BYTES: 102400
+      KAFKA_SOCKET_REQUEST_MAX_BYTES: 104857600
+      # Increase message size limits for 360 data
+      KAFKA_MESSAGE_MAX_BYTES: 10485760
+      KAFKA_REPLICA_FETCH_MAX_BYTES: 10485760
+    networks:
+      - spark-network
+
+  # Producer - Python script simulating 4096+ events/sec
+  producer:
+    build:
+      context: ./producer
+      dockerfile: Dockerfile
+    container_name: statsbomb-producer
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_TOPIC: statsbomb-360-events
+      TARGET_EVENTS_PER_SECOND: 4096
+      STATSBOMB_USER: ${STATSBOMB_USER}
+      STATSBOMB_PASSWORD: ${STATSBOMB_PASSWORD}
+    volumes:
+      - ./data:/data
+    networks:
+      - spark-network
+    restart: unless-stopped
+
+  # Spark Master - GPU enabled with RAPIDS
+  spark-master:
+    image: rapidsai/rapids-spark:3.3.1-cuda11-runtime-ubuntu20.04
+    container_name: spark-master
+    hostname: spark-master
+    ports:
+      - "8080:8080"  # Spark Master Web UI
+      - "7077:7077"  # Spark Master port
+      - "4040:4040"  # Spark Application UI (for metrics capture)
+    environment:
+      - SPARK_MODE=master
+      - SPARK_MASTER_HOST=spark-master
+      - SPARK_MASTER_PORT=7077
+      - SPARK_MASTER_WEBUI_PORT=8080
+    volumes:
+      - ./spark-conf:/opt/spark/conf
+      - ./data:/data
+      - ./models:/models
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - spark-network
+
+  # Spark Worker - GPU enabled with RAPIDS
+  spark-worker:
+    image: rapidsai/rapids-spark:3.3.1-cuda11-runtime-ubuntu20.04
+    container_name: spark-worker
+    hostname: spark-worker
+    depends_on:
+      - spark-master
+    ports:
+      - "8081:8081"  # Spark Worker Web UI
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_CORES=8
+      - SPARK_WORKER_MEMORY=16g
+      - SPARK_WORKER_WEBUI_PORT=8081
+    volumes:
+      - ./spark-conf:/opt/spark/conf
+      - ./data:/data
+      - ./models:/models
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - spark-network
+
+  # Jupyter Lab - Development environment with GPU access
+  jupyter-lab:
+    build:
+      context: ./jupyter
+      dockerfile: Dockerfile
+    container_name: jupyter-lab
+    depends_on:
+      - spark-master
+      - kafka
+    ports:
+      - "8888:8888"  # Jupyter Lab
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+      - SPARK_MASTER=spark://spark-master:7077
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+    volumes:
+      - ./notebooks:/work/notebooks
+      - ./data:/work/data
+      - ./models:/work/models
+      - ./spark-conf:/opt/spark/conf
+    command: jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root --NotebookApp.token='' --NotebookApp.password=''
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - spark-network
+
+networks:
+  spark-network:
+    driver: bridge

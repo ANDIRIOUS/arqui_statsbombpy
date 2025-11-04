@@ -1,0 +1,28 @@
+# StatsBomb and Data Processing
+statsbombpy==1.11.0
+pandas==2.0.3
+numpy==1.24.3
+
+# Kafka Integration
+kafka-python-ng==2.2.2
+
+# PySpark (compatible with Spark 3.3.1)
+pyspark==3.3.1
+
+# Machine Learning
+scikit-learn==1.3.0
+xgboost==1.7.6
+lightgbm==4.1.0
+
+# Data Visualization
+matplotlib==3.7.2
+seaborn==0.12.2
+plotly==5.16.1
+
+# Jupyter and Development
+jupyterlab==4.0.5
+ipywidgets==8.1.0
+
+# Utilities
+tqdm==4.66.1
+python-dotenv==1.0.0
