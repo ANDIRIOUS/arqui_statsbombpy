@@ -33,6 +33,8 @@ final2/
 ├── jupyter/                     # Jupyter Lab con GPU
 │   ├── Dockerfile
 │   └── requirements.txt
+├── spark-rapids/                # Custom Spark + RAPIDS image
+│   └── Dockerfile
 └── spark-conf/                  # Configuración de Spark
     └── spark-defaults.conf
 ```
@@ -40,7 +42,7 @@ final2/
 ## Requisitos
 
 ### Hardware
-- **GPU:** NVIDIA GPU con soporte CUDA 11.x
+- **GPU:** NVIDIA GPU con soporte CUDA 11.8 o superior
 - **RAM:** Mínimo 16GB recomendado
 - **CPU:** 8+ cores recomendado
 - **Disco:** 50GB+ espacio libre
@@ -49,7 +51,14 @@ final2/
 - Docker 20.10+
 - Docker Compose 2.0+
 - NVIDIA Container Toolkit (nvidia-docker2)
-- NVIDIA Driver 470+
+- NVIDIA Driver 470+ (compatible con CUDA 11.8)
+
+### Componentes de la Imagen Custom
+- **Base:** nvidia/cuda:11.8.0-runtime-ubuntu22.04
+- **Spark:** Apache Spark 3.3.1
+- **RAPIDS Accelerator:** v23.12.2 (rapids-4-spark_2.12-23.12.2.jar)
+- **Java:** OpenJDK 11
+- **Python:** 3.10
 
 ### Verificar GPU en Docker
 ```bash

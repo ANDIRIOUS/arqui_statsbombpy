@@ -1,6 +1,6 @@
 # StatsBomb and Data Processing
 statsbombpy==1.11.0
-pandas==2.0.3
+pandas==1.5.3  # Changed from 2.0.3 for PySpark 3.3.1 compatibility (iteritems deprecated in 2.0+)
 numpy==1.24.3
 
 # Kafka Integration
