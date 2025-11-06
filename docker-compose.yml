@@ -65,7 +65,9 @@ services:
 
   # Spark Master - GPU enabled with RAPIDS
   spark-master:
-    image: rapidsai/rapids-spark:3.3.1-cuda11-runtime-ubuntu20.04
+    build:
+      context: ./spark-rapids
+      dockerfile: Dockerfile
     container_name: spark-master
     hostname: spark-master
     ports:
@@ -94,7 +96,9 @@ services:
 
   # Spark Worker - GPU enabled with RAPIDS
   spark-worker:
-    image: rapidsai/rapids-spark:3.3.1-cuda11-runtime-ubuntu20.04
+    build:
+      context: ./spark-rapids
+      dockerfile: Dockerfile
     container_name: spark-worker
     hostname: spark-worker
     depends_on:
@@ -111,7 +115,12 @@ services:
       - ./spark-conf:/opt/spark/conf
       - ./data:/data
       - ./models:/models
-    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    command:
+      - /bin/bash
+      - -c
+      - |
+        /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker \
+          spark://spark-master:7077
     deploy:
       resources:
         reservations:
